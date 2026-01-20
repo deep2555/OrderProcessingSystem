@@ -4,11 +4,16 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import com.deepanshu.orderprocessing.domainentity.Items;
 import com.deepanshu.orderprocessing.domainentity.Orders;
 import com.deepanshu.orderprocessing.domainservice.Inventory;
 import com.deepanshu.orderprocessing.filehandling.FileHandlingProcess;
+import com.deepanshu.orderprocessing.multithreadingtask.OrderProcessingThreads;
 import com.deepanshu.orderprocessing.orderresultstatus.OrdersResult;
 
 public class OrderProcessingTask {
@@ -34,18 +39,45 @@ public class OrderProcessingTask {
 		// Step 2 read orders from file
 		List<Orders> orders = fileHandlingProcess.readFileFromLocation(location, inventory);
 
-		/*Step 3 validate the order list with inventory
-		 * after getting list of orders now validate it with the inventory like the
-		 * quantity is available or not
+		/*
+		 * Step 3 processing the orders concurrently using executor service
 		 */
-		List<OrdersResult> result = new ArrayList<>();
+		ExecutorService executorService = Executors.newFixedThreadPool(1);
+		List<Future<OrdersResult>> orderProcessingResult = new ArrayList<>();
 		for (Orders listOfOrders : orders) {
-			result.add(inventory.checkAndUpdateStock(listOfOrders));
-			
+			orderProcessingResult.add(executorService.submit(new OrderProcessingThreads(inventory, listOfOrders)));
 		}
-		for(OrdersResult test : result) {
-			System.out.println(test.getOrderId()+ " " + test.getOrderStatus()  + " " + test.getStatus());
+
+		// print the future result
+		for (Future<OrdersResult> listOfSuccessResult : orderProcessingResult) {
+			try {
+				OrdersResult result = listOfSuccessResult.get();
+
+				System.out.println("OrderID: " + result.getOrderId() + ", Status: " + result.getOrderStatus() + ", Reason: "
+						+ result.getStatus());
+				System.out.println("***********************************");
+
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			} catch (ExecutionException e) {
+				e.printStackTrace();
+			}
 		}
+		// shutdown the services
+		executorService.shutdown();
+		
+		
+		
+		
+		
+//		List<OrdersResult> result = new ArrayList<>();
+//		for (Orders listOfOrders : orders) {
+//			result.add(inventory.checkAndUpdateStock(listOfOrders));
+//			
+//		}
+//		for(OrdersResult test : result) {
+//			System.out.println(test.getOrderId()+ " " + test.getOrderStatus()  + " " + test.getStatus());
+//		}
 
 	}
 }
